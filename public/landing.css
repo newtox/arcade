@@ -30,3 +30,7 @@ td.empty { color:var(--muted); text-align:center; }
 tbody tr:first-child td { color:var(--gold); font-weight:bold; }
 p.credits { text-align:center; color:var(--muted); font-size:12px; margin:24px 0 0; }
 p.credits a { color:var(--muted); }
+h2.section { text-align:center; color:var(--accent); margin:48px 0 6px; font-size:clamp(22px,4vw,32px); text-shadow:2px 2px 0 #000; }
+a.game small { display:block; color:var(--gold); font-size:12px; margin:-2px 0 8px; }
+a.game.retro em { margin-bottom:0; }
+p.note { color:var(--muted); font-size:13px; margin:14px 0 0; }

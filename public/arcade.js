@@ -2,8 +2,12 @@
     "use strict";
 
     var script = document.currentScript;
-    var GAME = script && script.dataset.game;
-    var WA_URL = script && script.dataset.wa;
+    var data = (script && script.dataset) || {};
+    var GAME = data.game;
+    var WA_URL = data.wa;
+    var SCORED = !!data.order;
+    var ORDER = data.order || "desc";
+    var FORMAT = data.format || "number";
     if (!GAME) return;
 
     var store = {
@@ -22,33 +26,82 @@
         },
     };
 
-    // ---------- Volume ----------
+    function formatScore(value) {
+        if (FORMAT === "time") {
+            var ms = Math.max(0, Math.round(Number(value)));
+            var m = Math.floor(ms / 60000);
+            var s = Math.floor((ms % 60000) / 1000);
+            return m + ":" + String(s).padStart(2, "0") + "." + String(ms % 1000).padStart(3, "0");
+        }
+        return Number(value).toLocaleString("de-DE");
+    }
+
+    // ---------- Volume (HTML audio + Web Audio) ----------
 
     var volume = Number(store.get("volume", "0.3"));
     if (!(volume >= 0 && volume <= 1)) volume = 0.3;
     var muted = store.get("muted", "false") === "true";
     var media = new Set();
+    var masters = [];
 
-    function applyVolume(el) {
+    function effective() {
+        return muted ? 0 : volume;
+    }
+
+    function applyMedia(el) {
         try {
             el.volume = volume;
             el.muted = muted;
         } catch (e) {}
     }
 
+    function applyAll() {
+        media.forEach(applyMedia);
+        masters.forEach(function (g) {
+            try {
+                g.gain.value = effective();
+            } catch (e) {}
+        });
+    }
+
     var originalPlay = HTMLMediaElement.prototype.play;
     HTMLMediaElement.prototype.play = function () {
         media.add(this);
-        applyVolume(this);
+        applyMedia(this);
         return originalPlay.apply(this, arguments);
     };
+
+    if (window.AudioNode && window.AudioDestinationNode) {
+        var originalConnect = AudioNode.prototype.connect;
+        var masterOf = new WeakMap();
+        var masterFor = function (ctx) {
+            var gain = masterOf.get(ctx);
+            if (!gain) {
+                gain = ctx.createGain();
+                gain.gain.value = effective();
+                originalConnect.call(gain, ctx.destination);
+                masterOf.set(ctx, gain);
+                masters.push(gain);
+            }
+            return gain;
+        };
+        AudioNode.prototype.connect = function (target) {
+            if (target instanceof AudioDestinationNode && masterOf.get(target.context) !== this) {
+                var args = Array.prototype.slice.call(arguments);
+                args[0] = masterFor(target.context);
+                originalConnect.apply(this, args);
+                return target;
+            }
+            return originalConnect.apply(this, arguments);
+        };
+    }
 
     function setVolume(v, m) {
         volume = v;
         muted = m;
         store.set("volume", String(v));
         store.set("muted", String(m));
-        media.forEach(applyVolume);
+        applyAll();
         renderBar();
     }
 
@@ -99,6 +152,14 @@
         return namePromise;
     }
 
+    function stopKeys(node) {
+        ["keydown", "keyup", "keypress"].forEach(function (type) {
+            node.addEventListener(type, function (e) {
+                e.stopPropagation();
+            });
+        });
+    }
+
     function askName() {
         return new Promise(function (resolve) {
             var dialog = el("div", "arcade-dialog");
@@ -122,11 +183,7 @@
                 dialog.remove();
                 resolve(null);
             });
-            ["keydown", "keyup", "keypress"].forEach(function (type) {
-                dialog.addEventListener(type, function (e) {
-                    e.stopPropagation();
-                });
-            });
+            stopKeys(dialog);
             document.body.appendChild(dialog);
             setTimeout(function () {
                 input.focus();
@@ -144,20 +201,20 @@
             headers: body ? { "Content-Type": "application/json" } : {},
             body: body ? JSON.stringify(body) : undefined,
         }).then(function (r) {
-            return r.json().then(function (data) {
-                if (!r.ok) throw new Error(data.error || "request failed");
-                return data;
+            return r.json().then(function (d) {
+                if (!r.ok) throw new Error(d.error || "request failed");
+                return d;
             });
         });
     }
 
     window.arcadeGameOver = function (rawScore) {
-        var score = Math.floor(Number(rawScore));
-        if (!(score >= 0)) return;
+        if (!SCORED) return;
+        var score = Math.round(Number(rawScore));
+        if (!(score > 0)) return;
         var now = Date.now();
         if (score === lastReport.score && now - lastReport.time < 5000) return;
         lastReport = { score: score, time: now };
-        if (score === 0) return;
 
         resolveName()
             .then(function (name) {
@@ -185,8 +242,7 @@
         });
     }
 
-    var style = el("style");
-    style.textContent =
+    var css =
         ".arcade-bar{position:fixed;top:8px;right:8px;z-index:2147483646;display:flex;gap:6px;align-items:center;" +
         "font:13px ui-monospace,monospace;color:#f3eefc;background:rgba(20,17,31,.85);border:2px solid #3d3360;padding:4px 8px;border-radius:6px}" +
         ".arcade-bar button{all:unset;cursor:pointer;padding:2px 4px;font-size:15px;line-height:1}" +
@@ -199,9 +255,9 @@
         ".arcade-panel p{margin:10px 0 0;color:#a99cc9}.arcade-panel button,.arcade-dialog button{margin-top:12px;background:#ff4fa3;color:#14111f;border:0;padding:6px 12px;font:inherit;cursor:pointer}" +
         ".arcade-dialog label{display:block;margin-bottom:8px}.arcade-dialog input{width:100%;box-sizing:border-box;padding:6px;font:inherit;background:#14111f;color:#f3eefc;border:2px solid #3d3360}" +
         ".arcade-dialog div{display:flex;gap:8px;justify-content:flex-end}.arcade-dialog [data-skip]{background:#3d3360;color:#f3eefc}";
-    document.head.appendChild(style);
 
     var bar = el("div", "arcade-bar");
+    stopKeys(bar);
 
     function renderBar() {
         var icon = muted || volume === 0 ? "🔇" : volume < 0.5 ? "🔉" : "🔊";
@@ -209,34 +265,35 @@
             '<a href="/" target="_self" title="Zur Arcade" style="color:inherit;text-decoration:none">🕹️</a>' +
             '<button data-mute title="Ton an/aus">' + icon + "</button>" +
             '<input type="range" min="0" max="1" step="0.05" value="' + volume + '" title="Lautstärke">' +
-            '<button data-board title="Bestenliste">🏆</button>' +
-            (playerName ? '<span class="who" title="Du spielst als">' + escapeHtml(playerName) + "</span>" : "");
+            (SCORED ? '<button data-board title="Bestenliste">🏆</button>' : "") +
+            (SCORED && playerName ? '<span class="who" title="Du spielst als">' + escapeHtml(playerName) + "</span>" : "");
         bar.querySelector("[data-mute]").onclick = function () {
             setVolume(volume, !muted);
         };
         bar.querySelector("input").oninput = function (e) {
             setVolume(Number(e.target.value), false);
         };
-        bar.querySelector("[data-board]").onclick = function () {
-            api("GET", "?game=" + encodeURIComponent(GAME)).then(showBoard);
-        };
+        var board = bar.querySelector("[data-board]");
+        if (board) {
+            board.onclick = function () {
+                api("GET", "?game=" + encodeURIComponent(GAME)).then(showBoard);
+            };
+        }
     }
 
     function showBoard(result) {
         var load = result ? Promise.resolve(result) : api("GET", "?game=" + encodeURIComponent(GAME));
-        return load.then(function (data) {
+        return load.then(function (d) {
             var panel = el("div", "arcade-panel");
-            var rows = (data.scores || [])
+            var rows = (d.scores || [])
                 .map(function (s) {
                     var me = result && s.name === result.name ? ' class="me"' : "";
-                    return "<li" + me + ">" + escapeHtml(s.name) + "<span>" + Number(s.score).toLocaleString("de-DE") + "</span></li>";
+                    return "<li" + me + ">" + escapeHtml(s.name) + "<span>" + formatScore(s.score) + "</span></li>";
                 })
                 .join("");
-            var info = result
-                ? "<p>Deine Punkte: " + Number(result.score).toLocaleString("de-DE") + " – Platz " + result.rank + "</p>"
-                : "";
+            var info = result ? "<p>Dein Ergebnis: " + formatScore(result.score) + " – Platz " + result.rank + "</p>" : "";
             panel.innerHTML =
-                "<div><h3>🏆 Bestenliste</h3><ol>" + (rows || "<li>Noch keine Punkte</li>") + "</ol>" + info +
+                "<div><h3>🏆 Bestenliste</h3><ol>" + (rows || "<li>Noch keine Einträge</li>") + "</ol>" + info +
                 '<button type="button">Weiter</button></div>';
             panel.querySelector("button").onclick = function () {
                 panel.remove();
@@ -244,54 +301,45 @@
             panel.addEventListener("click", function (e) {
                 if (e.target === panel) panel.remove();
             });
+            stopKeys(panel);
             document.body.appendChild(panel);
         });
     }
 
-    // ---------- Game hooks ----------
+    // ---------- Game hooks (installed after the game scripts have loaded) ----------
 
     function hook() {
-        if (GAME === "tetris" && typeof window.lose === "function") {
-            var lose = window.lose;
-            window.lose = function () {
-                var score = window.score;
-                var result = lose.apply(this, arguments);
-                window.arcadeGameOver(score);
+        if (GAME === "radiusraid" && window.$ && typeof window.$.setState === "function") {
+            var setState = window.$.setState;
+            window.$.setState = function (state) {
+                var result = setState.apply(this, arguments);
+                if (state === "gameover") window.arcadeGameOver(window.$.score);
                 return result;
             };
         }
 
-        if (GAME === "hextris" && typeof window.gameOverDisplay === "function") {
-            var gameOverDisplay = window.gameOverDisplay;
-            window.gameOverDisplay = function () {
-                var result = gameOverDisplay.apply(this, arguments);
-                window.arcadeGameOver(window.score);
-                return result;
-            };
-        }
-
-        if (GAME === "2048" && window.HTMLActuator) {
-            var actuate = window.HTMLActuator.prototype.actuate;
-            var reported = false;
-            window.HTMLActuator.prototype.actuate = function (grid, metadata) {
-                var result = actuate.apply(this, arguments);
-                if (metadata && metadata.over && !reported) {
-                    reported = true;
-                    window.arcadeGameOver(metadata.score);
-                } else if (metadata && !metadata.over) {
-                    reported = false;
-                }
-                return result;
+        if (GAME === "hexgl" && window.bkcore && bkcore.hexgl && bkcore.hexgl.Gameplay) {
+            var proto = bkcore.hexgl.Gameplay.prototype;
+            var end = proto.end;
+            proto.end = function (result) {
+                var out = end.apply(this, arguments);
+                if (result === this.results.FINISH && this.finishTime) window.arcadeGameOver(this.finishTime);
+                return out;
             };
         }
     }
 
-    hook();
-    renderBar();
     function mount() {
+        var style = el("style");
+        style.textContent = css;
+        document.head.appendChild(style);
+        renderBar();
         document.body.appendChild(bar);
-        resolveName();
+        if (SCORED) resolveName();
     }
-    if (document.body) mount();
-    else document.addEventListener("DOMContentLoaded", mount);
+
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", mount);
+    else mount();
+    if (document.readyState === "complete") hook();
+    else window.addEventListener("load", hook);
 })();

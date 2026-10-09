@@ -2,5 +2,7 @@
 .github
 data
 games
+roms
+emulatorjs
 node_modules
 *.md
