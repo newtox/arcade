@@ -44,7 +44,6 @@ body.doom { padding:0; height:100vh; overflow:hidden; background:#000; display:f
 .doom-start h1 { margin:0; }
 .doom-start button { font:inherit; font-size:20px; padding:10px 22px; background:var(--accent); color:#14111f; border:0; box-shadow:4px 4px 0 #000; cursor:pointer; }
 .doom-start button:disabled { opacity:.6; cursor:wait; }
-.doom-start:not(.ready) button::after { content:" (lädt …)"; }
 .doom-start dl { display:grid; grid-template-columns:auto auto; gap:4px 14px; margin:0; font-size:14px; text-align:left; color:var(--muted); }
 .doom-start dt { color:var(--gold); text-align:right; }
 .doom-start dd { margin:0; }
@@ -89,7 +88,6 @@ body.pacman { padding:0; height:100vh; overflow:hidden; background:#000; display
 .pacman-start h1 { margin:0; color:var(--gold); }
 .pacman-start button { font:inherit; font-size:20px; padding:10px 22px; background:var(--gold); color:#14111f; border:0; box-shadow:4px 4px 0 #000; cursor:pointer; }
 .pacman-start button:disabled { opacity:.6; cursor:wait; }
-.pacman-start:not(.ready) button::after { content:" (lädt …)"; }
 .pacman-start dl { display:grid; grid-template-columns:auto auto; gap:4px 14px; margin:0; font-size:14px; text-align:left; color:var(--muted); }
 .pacman-start dt { color:var(--gold); text-align:right; }
 .pacman-start dd { margin:0; }

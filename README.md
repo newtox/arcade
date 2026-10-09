@@ -6,6 +6,7 @@ A small self-hosted arcade with leaderboards, built to be embedded in [WorkAdven
 - **Doom** and **Freedoom** run directly in the browser, with music, sound, savegames and a shared leaderboard.
 - **Console cabinets** (N64, NES, SNES, Game Boy, GBA, Mega Drive, PlayStation) run games the players load from their own disk. ROMs never leave the player's browser: they are kept in IndexedDB on request and are not uploaded or hosted by the server.
 - Every page gets a small overlay with volume control, and the player name comes from WorkAdventure when opened from a map (via the iframe API).
+- All pages are in German and English: `?lang=de` / `?lang=en` (remembered in the `arcade_lang` cookie), otherwise the browser's language; anything that is not German gets English.
 
 ## Pac-Man
 

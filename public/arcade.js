@@ -10,6 +10,13 @@
     var FORMAT = data.format || "number";
     if (!GAME) return;
 
+    // Language of the page (set by the server from ?lang=, the arcade_lang cookie or the browser)
+    var LANG = document.documentElement.lang === "de" ? "de" : "en";
+    function t(de, en) {
+        return LANG === "de" ? de : en;
+    }
+    window.arcadeLang = LANG;
+
     var store = {
         get: function (key, fallback) {
             try {
@@ -33,7 +40,7 @@
             var s = Math.floor((ms % 60000) / 1000);
             return m + ":" + String(s).padStart(2, "0") + "." + String(ms % 1000).padStart(3, "0");
         }
-        return Number(value).toLocaleString("de-DE");
+        return Number(value).toLocaleString(t("de-DE", "en-GB"));
     }
 
     // ---------- Volume (HTML audio + Web Audio) ----------
@@ -165,9 +172,10 @@
         return new Promise(function (resolve) {
             var dialog = el("div", "arcade-dialog");
             dialog.innerHTML =
-                '<form><label>Dein Name für die Bestenliste</label>' +
+                "<form><label>" + t("Dein Name für die Bestenliste", "Your name for the leaderboard") + "</label>" +
                 '<input name="name" maxlength="24" autocomplete="nickname" required>' +
-                '<div><button type="button" data-skip>Nicht eintragen</button><button type="submit">Eintragen</button></div></form>';
+                '<div><button type="button" data-skip>' + t("Nicht eintragen", "Skip") + '</button><button type="submit">' +
+                t("Eintragen", "Submit") + "</button></div></form>";
             var input = dialog.querySelector("input");
             input.value = playerName || "";
             dialog.querySelector("form").addEventListener("submit", function (e) {
@@ -226,16 +234,16 @@
             })
             .then(function (name) {
                 if (!name) {
-                    if (opts.toast && !opts.final) return showToast(opts.toast + "\n(nicht eingetragen)");
+                    if (opts.toast && !opts.final) return showToast(opts.toast + "\n" + t("(nicht eingetragen)", "(not submitted)"));
                     return showBoard(null);
                 }
                 return api("POST", "", { game: GAME, name: name, score: score }).then(
                     function (result) {
-                        if (opts.toast) showToast(opts.toast + "\nPlatz " + result.rank + " in der Bestenliste");
+                        if (opts.toast) showToast(opts.toast + "\n" + t("Platz " + result.rank + " in der Bestenliste", "Rank " + result.rank + " on the leaderboard"));
                         if (!opts.toast || opts.final) showBoard(result);
                     },
                     function () {
-                        if (opts.toast) showToast(opts.toast + "\nBestenliste gerade nicht erreichbar");
+                        if (opts.toast) showToast(opts.toast + "\n" + t("Bestenliste gerade nicht erreichbar", "Leaderboard not reachable right now"));
                         else showBoard(null);
                     },
                 );
@@ -283,11 +291,11 @@
     function renderBar() {
         var icon = muted || volume === 0 ? "🔇" : volume < 0.5 ? "🔉" : "🔊";
         bar.innerHTML =
-            '<a href="/" target="_self" title="Zur Arcade" style="color:inherit;text-decoration:none">🕹️</a>' +
-            '<button data-mute title="Ton an/aus">' + icon + "</button>" +
-            '<input type="range" min="0" max="1" step="0.05" value="' + volume + '" title="Lautstärke">' +
-            (SCORED ? '<button data-board title="Bestenliste">🏆</button>' : "") +
-            (SCORED && playerName ? '<span class="who" title="Du spielst als">' + escapeHtml(playerName) + "</span>" : "");
+            '<a href="/?lang=' + LANG + '" target="_self" title="' + t("Zur Arcade", "Back to the arcade") + '" style="color:inherit;text-decoration:none">🕹️</a>' +
+            '<button data-mute title="' + t("Ton an/aus", "Sound on/off") + '">' + icon + "</button>" +
+            '<input type="range" min="0" max="1" step="0.05" value="' + volume + '" title="' + t("Lautstärke", "Volume") + '">' +
+            (SCORED ? '<button data-board title="' + t("Bestenliste", "Leaderboard") + '">🏆</button>' : "") +
+            (SCORED && playerName ? '<span class="who" title="' + t("Du spielst als", "Playing as") + '">' + escapeHtml(playerName) + "</span>" : "");
         bar.querySelector("[data-mute]").onclick = function () {
             setVolume(volume, !muted);
         };
@@ -327,10 +335,12 @@
                     return "<li" + me + ">" + escapeHtml(s.name) + "<span>" + formatScore(s.score) + "</span></li>";
                 })
                 .join("");
-            var info = result ? "<p>Dein Ergebnis: " + formatScore(result.score) + " – Platz " + result.rank + "</p>" : "";
+            var info = result
+                ? "<p>" + t("Dein Ergebnis: ", "Your score: ") + formatScore(result.score) + t(" – Platz ", " – rank ") + result.rank + "</p>"
+                : "";
             panel.innerHTML =
-                "<div><h3>🏆 Bestenliste</h3><ol>" + (rows || "<li>Noch keine Einträge</li>") + "</ol>" + info +
-                '<button type="button">Weiter</button></div>';
+                "<div><h3>🏆 " + t("Bestenliste", "Leaderboard") + "</h3><ol>" + (rows || "<li>" + t("Noch keine Einträge", "No entries yet") + "</li>") +
+                "</ol>" + info + '<button type="button">' + t("Weiter", "Continue") + "</button></div>";
             panel.querySelector("button").onclick = function () {
                 panel.remove();
             };

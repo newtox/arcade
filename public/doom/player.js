@@ -51,10 +51,12 @@ async function storeSaved(prefix, entries) {
 // ---------- Leaderboard ----------
 
 const SKILL_FACTOR = [0.5, 0.75, 1, 1.5, 2];
-const SKILL_NAME = ["Baby", "Leicht", "Normal", "Schwer", "Albtraum"];
+const DE = document.documentElement.lang === "de";
+const tr = (de, en) => (DE ? de : en);
+const SKILL_NAME = DE ? ["Baby", "Leicht", "Normal", "Schwer", "Albtraum"] : ["Baby", "Easy", "Normal", "Hard", "Nightmare"];
 let run = null;
 
-const fmt = (n) => Number(n).toLocaleString("de-DE");
+const fmt = (n) => Number(n).toLocaleString(DE ? "de-DE" : "en-GB");
 const clock = (tics) => {
     const s = Math.floor(tics / 35);
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
@@ -70,8 +72,9 @@ function unranked(reason) {
     if (!run.ranked) return;
     run.ranked = false;
     toast(reason === 1
-        ? "Spielstand geladen – dieser Durchgang zählt nicht für die Bestenliste. Starte ein neues Spiel für die Wertung."
-        : "Cheat benutzt – dieser Durchgang zählt nicht für die Bestenliste.");
+        ? tr("Spielstand geladen – dieser Durchgang zählt nicht für die Bestenliste. Starte ein neues Spiel für die Wertung.",
+             "Savegame loaded – this run does not count for the leaderboard. Start a new game to be ranked.")
+        : tr("Cheat benutzt – dieser Durchgang zählt nicht für die Bestenliste.", "Cheat used – this run does not count for the leaderboard."));
 }
 
 function levelDone(skill, episode, map, next, kills, maxKills, items, maxItems, secrets, maxSecrets, tics, parTics) {
@@ -81,11 +84,12 @@ function levelDone(skill, episode, map, next, kills, maxKills, items, maxItems, 
     run.total += points;
     const final = map === 8;
     const text =
-        `E${episode}M${map} geschafft: +${fmt(points)} Punkte · Gesamt ${fmt(run.total)}\n` +
+        tr(`E${episode}M${map} geschafft: +${fmt(points)} Punkte · Gesamt ${fmt(run.total)}\n`,
+           `E${episode}M${map} done: +${fmt(points)} points · total ${fmt(run.total)}\n`) +
         `Kills ${kills}/${maxKills} · Items ${items}/${maxItems} · Secrets ${secrets}/${maxSecrets} · ` +
-        `Zeit ${clock(tics)}${parTics ? ` (Par ${clock(parTics)})` : ""} · ${SKILL_NAME[skill] ?? ""}`;
+        `${tr("Zeit", "Time")} ${clock(tics)}${parTics ? ` (Par ${clock(parTics)})` : ""} · ${SKILL_NAME[skill] ?? ""}`;
     if (run.ranked && window.arcadeGameOver) window.arcadeGameOver(run.total, { toast: text, final });
-    else toast(text + "\n(ohne Wertung)");
+    else toast(text + "\n" + tr("(ohne Wertung)", "(not ranked)"));
 }
 
 // ---------- Audio ----------
@@ -389,7 +393,7 @@ async function start() {
             exports.dg_tick();
         } catch (err) {
             console.error(err);
-            toast("Doom ist abgestürzt – Seite neu laden.");
+            toast(tr("Doom ist abgestürzt – Seite neu laden.", "Doom crashed – reload the page."));
             return;
         }
         requestAnimationFrame(frame);

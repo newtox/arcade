@@ -14,6 +14,8 @@
     var remember = root.querySelector("input[name=remember]");
     var drop = root.querySelector(".drop");
     var status = root.querySelector(".status");
+    var DE = document.documentElement.lang === "de";
+    function t(de, en) { return DE ? de : en; }
 
     function setStatus(text, isError) {
         status.textContent = text || "";
@@ -66,7 +68,7 @@
     // ---------- UI ----------
 
     function formatSize(bytes) {
-        if (bytes > 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1).replace(".", ",") + " MB";
+        if (bytes > 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1).replace(".", DE ? "," : ".") + " MB";
         return Math.max(1, Math.round(bytes / 1024)) + " KB";
     }
 
@@ -75,7 +77,7 @@
             roms.sort(function (a, b) { return (b.lastPlayed || 0) - (a.lastPlayed || 0); });
             list.innerHTML = "";
             if (!roms.length) {
-                list.innerHTML = '<li class="empty">Noch keine Spiele gespeichert.</li>';
+                list.innerHTML = '<li class="empty">' + t("Noch keine Spiele gespeichert.", "No games saved yet.") + "</li>";
                 return;
             }
             roms.forEach(function (rom) {
@@ -83,16 +85,16 @@
                 var play = document.createElement("button");
                 play.className = "play";
                 play.textContent = "▶ " + rom.name;
-                play.title = "Spielen";
+                play.title = t("Spielen", "Play");
                 play.onclick = function () { startStored(rom.id); };
                 var meta = document.createElement("small");
                 meta.textContent = formatSize(rom.size);
                 var del = document.createElement("button");
                 del.className = "delete";
                 del.textContent = "✕";
-                del.title = "Aus dem Browser löschen";
+                del.title = t("Aus dem Browser löschen", "Remove from this browser");
                 del.onclick = function () {
-                    if (!confirm('"' + rom.name + '" aus diesem Browser löschen? Spielstände bleiben erhalten.')) return;
+                    if (!confirm(t('"' + rom.name + '" aus diesem Browser löschen? Spielstände bleiben erhalten.', 'Remove "' + rom.name + '" from this browser? Save data is kept.'))) return;
                     tx("readwrite", function (s) { return s.delete(rom.id); }).then(renderList);
                 };
                 li.appendChild(play);
@@ -111,17 +113,17 @@
     function handleFile(file) {
         if (!file) return;
         if (!acceptable(file)) {
-            setStatus("Diese Datei passt nicht zu diesem Automaten. Erlaubt: " + EXTENSIONS.join(", "), true);
+            setStatus(t("Diese Datei passt nicht zu diesem Automaten. Erlaubt: ", "This file does not fit this cabinet. Allowed: ") + EXTENSIONS.join(", "), true);
             return;
         }
         if (!remember.checked) return launch(file);
-        setStatus("Speichere im Browser …");
+        setStatus(t("Speichere im Browser …", "Saving in your browser …"));
         tx("readwrite", function (s) {
             return s.add({ system: SYSTEM, name: file.name, size: file.size, blob: file, added: Date.now(), lastPlayed: Date.now() });
         }).then(function () {
             launch(file);
         }, function () {
-            setStatus("Konnte nicht im Browser speichern (zu wenig Speicher?) – starte trotzdem.", true);
+            setStatus(t("Konnte nicht im Browser speichern (zu wenig Speicher?) – starte trotzdem.", "Could not save in your browser (not enough space?) – starting anyway."), true);
             launch(file);
         });
     }
@@ -137,7 +139,7 @@
             };
             return req;
         }).then(function (rom) {
-            if (!rom) return setStatus("Spiel nicht gefunden.", true);
+            if (!rom) return setStatus(t("Spiel nicht gefunden.", "Game not found."), true);
             launch(new File([rom.blob], rom.name));
         });
     }
@@ -153,7 +155,7 @@
         window.EJS_gameUrl = file;
         window.EJS_gameName = file.name.replace(/\.[^.]+$/, "");
         window.EJS_pathtodata = cfg.ejs;
-        window.EJS_language = "de-GER";
+        window.EJS_language = DE ? "de-GER" : "en-US";
         window.EJS_volume = 1;
         window.EJS_color = "#ff4fa3";
         window.EJS_startOnLoaded = true;

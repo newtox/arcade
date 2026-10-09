@@ -1,7 +1,7 @@
 /*
  * Pac-Man by Dale Harvey (https://github.com/daleharvey/pacman, WTFPL), commit 3acc5e2.
  * Changed for the arcade: drawn at 4x resolution so it can fill the screen, no Modernizr,
- * German texts, Enter/Space also start a game, WASD moves, M (not S) mutes, game over reports the score to the leaderboard.
+ * German and English texts, Enter/Space also start a game, WASD moves, M (not S) mutes, game over reports the score to the leaderboard.
  */
 /*jslint browser: true, undef: true, eqeqeq: true, nomen: true, white: true */
 /*global window: false, document: false */
@@ -27,6 +27,10 @@ var NONE        = 4,
     Pacman      = {};
 
 Pacman.FPS = 30;
+
+// Texts in the page language (the game font has no umlauts)
+var PAC_DE = document.documentElement.lang === "de";
+function pacText(de, en) { return PAC_DE ? de : en; }
 
 Pacman.Ghost = function (game, map, colour) {
 
@@ -860,7 +864,7 @@ var PACMAN = (function () {
             setState(PAUSE);
             audio.pause();
             map.draw(ctx);
-            dialog("Pause - P weiter");
+            dialog(pacText("Pause - P weiter", "Paused - P to resume"));
         } else if (state !== PAUSE) {   
             return user.keyDown(e);
         }
@@ -919,7 +923,7 @@ var PACMAN = (function () {
 
         ctx.fillStyle = "#FFFF00";
         ctx.font      = "14px BDCartoonShoutRegular";
-        ctx.fillText("Punkte: " + user.theScore(), 30, textBase);
+        ctx.fillText(pacText("Punkte: ", "Score: ") + user.theScore(), 30, textBase);
         ctx.fillText("Level: " + level, 260, textBase);
     }
 
@@ -986,7 +990,7 @@ var PACMAN = (function () {
         } else if (state === WAITING && stateChanged) {            
             stateChanged = false;
             map.draw(ctx);
-            dialog(gameOver ? "Game Over - N oder Enter" : "N oder Enter zum Starten");            
+            dialog(gameOver ? pacText("Game Over - N oder Enter", "Game Over - N or Enter") : pacText("N oder Enter zum Starten", "N or Enter to start"));            
         } else if (state === EATEN_PAUSE && 
                    (tick - timerStart) > (Pacman.FPS / 3)) {
             map.draw(ctx);
@@ -1013,7 +1017,7 @@ var PACMAN = (function () {
                 if (diff !== lastTime) { 
                     lastTime = diff;
                     map.draw(ctx);
-                    dialog("Los in " + diff);
+                    dialog(pacText("Los in ", "Starting in ") + diff);
                 }
             }
         } 
@@ -1076,7 +1080,7 @@ var PACMAN = (function () {
         }
         
         map.draw(ctx);
-        dialog("Laden ...");
+        dialog(pacText("Laden ...", "Loading ..."));
 
         var probe = document.createElement("audio"),
             extension = probe.canPlayType && probe.canPlayType('audio/ogg; codecs="vorbis"') ? 'ogg' : 'mp3';
@@ -1105,7 +1109,7 @@ var PACMAN = (function () {
         
     function loaded() {
 
-        dialog("N oder Enter zum Starten");
+        dialog(pacText("N oder Enter zum Starten", "N or Enter to start"));
         
         document.addEventListener("keydown", keyDown, true);
         document.addEventListener("keypress", keyPress, true); 
