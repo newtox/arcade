@@ -1,0 +1,32 @@
+:root { --bg:#14111f; --card:#221c35; --line:#3d3360; --text:#f3eefc; --muted:#a99cc9; --accent:#ff4fa3; --gold:#ffd84f; }
+* { box-sizing:border-box; }
+body { margin:0; min-height:100vh; background:var(--bg); color:var(--text);
+       font-family:ui-monospace, "Courier New", monospace; padding:32px 16px; }
+a { color:var(--accent); }
+h1 { text-align:center; font-size:clamp(28px,6vw,48px); margin:0 0 6px; color:var(--accent);
+     text-shadow:3px 3px 0 #000; letter-spacing:2px; }
+p.sub, p.foot { text-align:center; color:var(--muted); margin:0 0 32px; }
+p.foot { margin:32px 0 0; }
+.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; max-width:960px; margin:0 auto; }
+a.game { display:block; background:var(--card); border:3px solid var(--line); padding:20px; color:var(--text);
+         text-decoration:none; box-shadow:6px 6px 0 #000; transition:transform .1s, border-color .1s; }
+a.game:hover { transform:translate(-2px,-2px); border-color:var(--accent); }
+a.game strong { display:block; font-size:22px; margin-bottom:6px; }
+a.game em { display:block; font-style:normal; color:var(--muted); font-size:14px; margin-bottom:14px; }
+a.game ol { list-style:none; margin:0; padding:10px 0 0; border-top:2px dashed var(--line); font-size:14px; }
+a.game li { display:flex; justify-content:space-between; gap:8px; padding:2px 0; }
+a.game li b { color:var(--gold); }
+a.game li.empty { color:var(--muted); }
+.tables { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:24px; max-width:1100px; margin:0 auto; }
+section { background:var(--card); border:3px solid var(--line); box-shadow:6px 6px 0 #000; padding:16px; overflow-x:auto; }
+section h2 { margin:0 0 10px; }
+section h2 a { text-decoration:none; }
+table { width:100%; border-collapse:collapse; font-size:14px; }
+th, td { text-align:left; padding:4px 6px; border-bottom:1px solid var(--line); }
+th { color:var(--muted); font-weight:normal; }
+td:nth-child(3) { color:var(--gold); text-align:right; }
+th:nth-child(3) { text-align:right; }
+td.empty { color:var(--muted); text-align:center; }
+tbody tr:first-child td { color:var(--gold); font-weight:bold; }
+p.credits { text-align:center; color:var(--muted); font-size:12px; margin:24px 0 0; }
+p.credits a { color:var(--muted); }

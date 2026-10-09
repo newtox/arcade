@@ -1,0 +1,13 @@
+services:
+  arcade:
+    image: ghcr.io/newtox/arcade:latest
+    container_name: arcade
+    restart: unless-stopped
+    environment:
+      ARCADE_TITLE: Arcade
+      WA_URL: https://workadventure.graf-cedric.de
+      FRAME_ANCESTORS: "'self' https://workadventure.graf-cedric.de"
+    ports:
+      - "127.0.0.1:8094:8080"
+    volumes:
+      - /docker_volumes/arcade/data:/data

@@ -1,0 +1,6 @@
+.git
+.github
+data
+games
+node_modules
+*.md
