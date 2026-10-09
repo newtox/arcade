@@ -2,9 +2,14 @@
 
 A small self-hosted arcade with leaderboards, built to be embedded in [WorkAdventure](https://workadventu.re).
 
+- **Pac-Man** fills the whole window and has a leaderboard.
 - **Doom** and **Freedoom** run directly in the browser, with music, sound, savegames and a shared leaderboard.
 - **Console cabinets** (N64, NES, SNES, Game Boy, GBA, Mega Drive, PlayStation) run games the players load from their own disk. ROMs never leave the player's browser: they are kept in IndexedDB on request and are not uploaded or hosted by the server.
 - Every page gets a small overlay with volume control, and the player name comes from WorkAdventure when opened from a map (via the iframe API).
+
+## Pac-Man
+
+[daleharvey/pacman](https://github.com/daleharvey/pacman) (WTFPL), vendored in `public/pacman/` with small changes listed at the top of `pacman.js`: it is drawn at 4× resolution and scaled to the window, Enter/Space start a game, WASD moves, M mutes, and the score is submitted when the last life is lost.
 
 ## Doom
 
@@ -60,4 +65,4 @@ Create an area with **Open website** pointing to e.g. `https://arcade.example.co
 
 ## Licenses
 
-The arcade code is by its authors; the Doom port in `doom/` is GPL-2.0 like doomgeneric and Chocolate Doom. See `/about` in the running arcade for all components.
+The arcade code is by its authors; Pac-Man in `public/pacman/` is WTFPL; the Doom port in `doom/` is GPL-2.0 like doomgeneric and Chocolate Doom. See `/about` in the running arcade for all components.

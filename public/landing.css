@@ -78,3 +78,19 @@ body.console-page { padding:0; min-height:100vh; }
 .library button.delete:hover { color:#ff6b6b; }
 .library small { color:var(--muted); white-space:nowrap; }
 .picker .back { display:block; text-align:center; margin-top:24px; }
+
+/* Pac-Man */
+body.pacman { padding:0; height:100vh; overflow:hidden; background:#000; display:flex; align-items:center; justify-content:center; }
+#pacman { position:relative; width:min(100vw, calc(100vh * 342 / 426)); aspect-ratio:342/426; }
+#pacman .board, #pacman canvas { display:block; width:100%; height:100%; outline:none; }
+.pacman-start { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px;
+                background:rgba(10,8,16,.86); color:var(--text); cursor:pointer; text-align:center; padding:16px; }
+.pacman-start[hidden] { display:none; }
+.pacman-start h1 { margin:0; color:var(--gold); }
+.pacman-start button { font:inherit; font-size:20px; padding:10px 22px; background:var(--gold); color:#14111f; border:0; box-shadow:4px 4px 0 #000; cursor:pointer; }
+.pacman-start button:disabled { opacity:.6; cursor:wait; }
+.pacman-start:not(.ready) button::after { content:" (lädt …)"; }
+.pacman-start dl { display:grid; grid-template-columns:auto auto; gap:4px 14px; margin:0; font-size:14px; text-align:left; color:var(--muted); }
+.pacman-start dt { color:var(--gold); text-align:right; }
+.pacman-start dd { margin:0; }
+.pacman-start p { margin:0; font-size:13px; color:var(--muted); max-width:420px; }

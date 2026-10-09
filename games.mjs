@@ -1,7 +1,17 @@
-// Doom games come with the arcade (freely distributable IWADs) and have a leaderboard.
+// Pac-Man and the Doom games come with the arcade and have a leaderboard; Doom uses freely distributable IWADs.
 // Console cabinets run ROMs the players load from their own disk; the server never hosts ROMs.
 
 export const GAMES = [
+    {
+        id: "pacman",
+        title: "Pac-Man",
+        kind: "pacman",
+        description: "Der Klassiker im Vollbild. Pfeiltasten oder WASD, P pausiert, M schaltet den Ton aus.",
+        score: { label: "Punkte", order: "desc", format: "number" },
+        author: "Dale Harvey",
+        license: "WTFPL",
+        source: "https://github.com/daleharvey/pacman",
+    },
     {
         id: "doom",
         title: "Doom",

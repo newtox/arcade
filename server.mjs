@@ -233,7 +233,7 @@ ${body}
 }
 
 function landingPage() {
-    const doom = GAMES.filter((g) => g.kind === "doom").map((g) => {
+    const doom = GAMES.filter((g) => g.kind === "doom" || g.kind === "pacman").map((g) => {
         const scores = top(g, 3);
         const rows = scores.length
             ? scores.map((s, i) => `<li><span>${["🥇", "🥈", "🥉"][i]} ${esc(s.name)}</span><b>${formatScore(g, s.score)}</b></li>`).join("")
@@ -263,7 +263,7 @@ function scoresPage() {
     return layout(`Bestenliste – ${TITLE}`, `<h1>🏆 BESTENLISTE</h1>
 <p class="sub"><a href="/">← Zurück zur Arcade</a></p>
 <main class="tables">${sections}</main>
-<p class="credits">Punkte pro Level: Kills × 100, Items × 20, Secrets × 500, plus 20 pro Sekunde unter Par – mal Schwierigkeit (Baby ×0,5 bis Albtraum ×2). Gezählt wird der Durchgang ab „Neues Spiel“; Cheats oder geladene Spielstände zählen nicht.</p>`);
+<p class="credits">Doom: Punkte pro Level: Kills × 100, Items × 20, Secrets × 500, plus 20 pro Sekunde unter Par – mal Schwierigkeit (Baby ×0,5 bis Albtraum ×2). Gezählt wird der Durchgang ab „Neues Spiel“; Cheats oder geladene Spielstände zählen nicht.</p>`);
 }
 
 function aboutPage() {
@@ -339,6 +339,39 @@ ${scriptTag(game)}
 </html>`;
 }
 
+function pacmanPage(game) {
+    return `<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${esc(game.title)} – ${esc(TITLE)}</title>
+<link rel="stylesheet" href="${asset("landing.css")}">
+<style>@font-face { font-family:"BDCartoonShoutRegular"; src:url("${asset("pacman/BD_Cartoon_Shout-webfont.ttf")}") format("truetype"); }</style>
+${scriptTag(game)}
+</head>
+<body class="pacman">
+<div id="pacman" data-root="/_arcade/pacman/">
+<div class="board"></div>
+<div class="pacman-start">
+<h1>${esc(game.title.toUpperCase())}</h1>
+<button type="button" disabled>▶ Klicken zum Starten</button>
+<dl>
+<dt>Pfeile / WASD</dt><dd>Laufen</dd>
+<dt>P</dt><dd>Pause</dd>
+<dt>N</dt><dd>Neues Spiel</dd>
+<dt>M</dt><dd>Spielton aus/an</dd>
+<dt>F</dt><dd>Echtes Vollbild</dd>
+</dl>
+<p>Wenn das letzte Leben weg ist, landen deine Punkte in der Bestenliste.</p>
+</div>
+</div>
+<script src="${asset("pacman/pacman.js")}"></script>
+<script src="${asset("pacman/player.js")}"></script>
+</body>
+</html>`;
+}
+
 const wads = new Set(GAMES.filter((g) => g.iwad).map((g) => g.iwad));
 
 export const server = http.createServer(async (req, res) => {
@@ -375,7 +408,7 @@ export const server = http.createServer(async (req, res) => {
         if (!game) return send(res, 404, "Not found", { "Content-Type": "text/plain; charset=utf-8" });
         if (rest.length === 0) return send(res, 301, "", { Location: `/${id}/` });
         if (rest.join("/") !== "") return send(res, 404, "Not found");
-        return html(res, game.kind === "doom" ? doomPage(game) : consolePage(game));
+        return html(res, game.kind === "doom" ? doomPage(game) : game.kind === "pacman" ? pacmanPage(game) : consolePage(game));
     } catch (err) {
         console.error(err);
         if (!res.headersSent) send(res, 500, "Internal error");
