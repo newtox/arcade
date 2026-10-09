@@ -273,7 +273,7 @@ function aboutPage() {
     return layout(`Spiele & Lizenzen – ${TITLE}`, `<h1>SPIELE &amp; LIZENZEN</h1>
 <p class="sub"><a href="/">← Zurück zur Arcade</a></p>
 <main class="tables"><section><table><thead><tr><th>Was</th><th>Von</th><th>Lizenz</th><th>Quelle</th></tr></thead><tbody>${rows}</tbody></table>
-<p class="note">Doom (Shareware) und Freedoom werden unverändert und kostenlos bereitgestellt, wie es ihre Lizenzen erlauben. Für die Konsolen stellt die Arcade keine Spiele bereit: ROMs werden ausschließlich im Browser der Spieler geladen und dort gespeichert, der Server sieht sie nie. Der Quellcode der Arcade liegt unter <a href="https://github.com/newtox/arcade">github.com/newtox/arcade</a>.</p></section></main>`);
+<p class="note">Doom (Shareware) und Freedoom werden unverändert und kostenlos bereitgestellt, wie es ihre Lizenzen erlauben. Für die Konsolen stellt die Arcade keine Spiele bereit: ROMs werden ausschließlich im Browser der Spieler geladen und dort gespeichert, der Server sieht sie nie. Der Quellcode der Arcade liegt unter <a href="https://github.com/newtox/wa-arcade">github.com/newtox/wa-arcade</a>.</p></section></main>`);
 }
 
 function doomPage(game) {

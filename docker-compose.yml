@@ -1,6 +1,6 @@
 services:
   arcade:
-    image: ghcr.io/newtox/arcade:latest
+    image: ghcr.io/newtox/wa-arcade:latest
     container_name: arcade
     restart: unless-stopped
     environment:
