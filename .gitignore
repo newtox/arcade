@@ -1,5 +1,6 @@
 data/
-games/
-roms/
+wads/
 emulatorjs/
+public/doom/doom.wasm
+public/vendor/
 node_modules/

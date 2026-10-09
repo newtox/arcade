@@ -1,19 +1,33 @@
 import http from "node:http";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
-import { GAMES, ENGINE_CREDITS } from "./games.mjs";
+import { GAMES, CREDITS } from "./games.mjs";
 
 const PORT = Number(process.env.PORT ?? 8080);
 const APP_DIR = path.dirname(new URL(import.meta.url).pathname);
-const GAMES_DIR = process.env.GAMES_DIR ?? path.join(APP_DIR, "games");
-const ROMS_DIR = process.env.ROMS_DIR ?? path.join(APP_DIR, "roms");
+const PUBLIC_DIR = process.env.PUBLIC_DIR ?? path.join(APP_DIR, "public");
+const WADS_DIR = process.env.WADS_DIR ?? path.join(APP_DIR, "wads");
 const EJS_DIR = process.env.EJS_DIR ?? path.join(APP_DIR, "emulatorjs");
-const PUBLIC_DIR = path.join(APP_DIR, "public");
 const DATA_DIR = process.env.DATA_DIR ?? path.join(APP_DIR, "data");
 const WA_URL = (process.env.WA_URL ?? "").replace(/\/+$/, "");
 const FRAME_ANCESTORS = process.env.FRAME_ANCESTORS ?? "'self'";
 const TITLE = process.env.ARCADE_TITLE ?? "Arcade";
+
+// Content hash per public asset, appended as ?v=… so browsers and CDNs pick up new versions immediately.
+const assetVersion = new Map();
+function asset(name) {
+    if (!assetVersion.has(name)) {
+        let version = "0";
+        try {
+            version = createHash("sha256").update(readFileSync(path.join(PUBLIC_DIR, name))).digest("hex").slice(0, 10);
+        } catch {}
+        assetVersion.set(name, version);
+    }
+    return `/_arcade/${name}?v=${assetVersion.get(name)}`;
+}
 
 const gameById = new Map(GAMES.map((g) => [g.id, g]));
 const scoredGames = GAMES.filter((g) => g.score);
@@ -173,13 +187,11 @@ const MIME = {
     ".txt": "text/plain; charset=utf-8",
     ".wasm": "application/wasm",
     ".data": "application/octet-stream",
-    ".nes": "application/octet-stream",
-    ".gb": "application/octet-stream",
-    ".gbc": "application/octet-stream",
+    ".wad": "application/octet-stream",
 };
 
 function scriptTag(game) {
-    const attrs = [`src="/_arcade/arcade.js"`, `data-game="${game.id}"`];
+    const attrs = [`src="${asset("arcade.js")}"`, `data-game="${game.id}"`];
     if (game.score) {
         attrs.push(`data-order="${game.score.order}"`, `data-format="${game.score.format}"`, `data-label="${esc(game.score.label)}"`);
     }
@@ -187,41 +199,20 @@ function scriptTag(game) {
     return `<script ${attrs.join(" ")}></script>`;
 }
 
-export function transform(game, relPath, content) {
-    if (relPath === "index.html") {
-        let page = content
-            .replace(/<script[^>]*adsbygoogle[^>]*><\/script>/g, "")
-            .replace(/<script[^>]*>\s*\/\/analytics[\s\S]*?<\/script>/g, "")
-            .replace(/<script>\s*\(function\(i,s,o,g,r,a,m\)[\s\S]*?<\/script>/g, "");
-        if (game.id === "hexgl") page = page.replace(/https?:\/\/hexgl\.bkcore\.com\/(favicon|image)\.png/g, "favicon.png");
-        const tag = scriptTag(game);
-        page = /<head[^>]*>/i.test(page) ? page.replace(/<head[^>]*>/i, (m) => `${m}\n${tag}`) : tag + page;
-        return page;
-    }
-    if (game.id === "spacehuggers" && relPath === "appLevel.js") {
-        return content.replace(
-            /const resetGame=\(\)=>\s*\{/,
-            "$& if (level && window.arcadeGameOver) window.arcadeGameOver(totalKills);",
-        );
-    }
-    return content;
-}
-
-async function serveFile(res, filePath, transformFn) {
+async function serveFile(res, filePath, { immutable = false } = {}) {
     let stat;
     try {
         stat = await fs.stat(filePath);
     } catch {
         return send(res, 404, "Not found", { "Content-Type": "text/plain; charset=utf-8" });
     }
-    if (stat.isDirectory()) return serveFile(res, path.join(filePath, "index.html"), transformFn);
+    if (!stat.isFile()) return send(res, 404, "Not found", { "Content-Type": "text/plain; charset=utf-8" });
     const type = MIME[path.extname(filePath).toLowerCase()] ?? "application/octet-stream";
-    if (transformFn && (type.startsWith("text/html") || type.startsWith("text/javascript"))) {
-        const content = transformFn(await fs.readFile(filePath, "utf8"));
-        return send(res, 200, content, { "Content-Type": type, "Cache-Control": "no-cache" });
-    }
     const data = await fs.readFile(filePath);
-    return send(res, 200, data, { "Content-Type": type, "Cache-Control": "public, max-age=86400" });
+    return send(res, 200, data, {
+        "Content-Type": type,
+        "Cache-Control": immutable ? "public, max-age=31536000, immutable" : "public, max-age=3600",
+    });
 }
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -233,7 +224,7 @@ function layout(title, body) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(title)}</title>
-<link rel="stylesheet" href="/_arcade/landing.css">
+<link rel="stylesheet" href="${asset("landing.css")}">
 </head>
 <body>
 ${body}
@@ -242,22 +233,22 @@ ${body}
 }
 
 function landingPage() {
-    const web = GAMES.filter((g) => g.kind === "web").map((g) => {
+    const doom = GAMES.filter((g) => g.kind === "doom").map((g) => {
         const scores = top(g, 3);
         const rows = scores.length
             ? scores.map((s, i) => `<li><span>${["🥇", "🥈", "🥉"][i]} ${esc(s.name)}</span><b>${formatScore(g, s.score)}</b></li>`).join("")
             : `<li class="empty">Noch keine Einträge</li>`;
         return `<a class="game" href="/${g.id}/"><strong>${esc(g.title)}</strong><em>${esc(g.description)}</em><ol>${rows}</ol></a>`;
     }).join("");
-    const retro = GAMES.filter((g) => g.kind === "retro").map((g) =>
-        `<a class="game retro" href="/${g.id}/"><strong>${esc(g.title)}</strong><small>${esc(g.system)} · ${esc(g.players)}</small><em>${esc(g.description)}</em></a>`,
+    const consoles = GAMES.filter((g) => g.kind === "console").map((g) =>
+        `<a class="game console" href="/${g.id}/"><strong>${esc(g.title)}</strong><small>${esc(g.extensions.filter((e) => e !== ".zip" && e !== ".7z").join(" "))}</small><em>${esc(g.hint ?? "Eigene ROM laden und losspielen.")}</em></a>`,
     ).join("");
     return layout(TITLE, `<h1>● ${esc(TITLE.toUpperCase())} ●</h1>
 <p class="sub">Insert coin – oder einfach klicken.</p>
-<main class="grid">${web}</main>
-<h2 class="section">🕹️ Retro-Ecke</h2>
-<p class="sub">Homebrew-Spiele für NES und Game Boy – frei verfügbar von ihren Entwicklern.</p>
-<main class="grid">${retro}</main>
+<main class="grid">${doom}</main>
+<h2 class="section">🎮 Konsolen</h2>
+<p class="sub">Lade deine eigenen Spiele – die Datei bleibt in deinem Browser, hochgeladen wird nichts.</p>
+<main class="grid">${consoles}</main>
 <p class="foot"><a href="/scores">Komplette Bestenliste</a> · <a href="/about">Spiele &amp; Lizenzen</a></p>`);
 }
 
@@ -271,45 +262,84 @@ function scoresPage() {
     }).join("");
     return layout(`Bestenliste – ${TITLE}`, `<h1>🏆 BESTENLISTE</h1>
 <p class="sub"><a href="/">← Zurück zur Arcade</a></p>
-<main class="tables">${sections}</main>`);
+<main class="tables">${sections}</main>
+<p class="credits">Punkte pro Level: Kills × 100, Items × 20, Secrets × 500, plus 20 pro Sekunde unter Par – mal Schwierigkeit (Baby ×0,5 bis Albtraum ×2). Gezählt wird der Durchgang ab „Neues Spiel“; Cheats oder geladene Spielstände zählen nicht.</p>`);
 }
 
 function aboutPage() {
-    const rows = [...GAMES, ...ENGINE_CREDITS].map((g) =>
-        `<tr><td>${esc(g.title)}</td><td>${esc(g.author)}</td><td>${esc(g.license)}</td><td><a href="${esc(g.source)}">Quellcode</a></td></tr>`,
+    const rows = [...GAMES.filter((g) => g.author), ...CREDITS].map((g) =>
+        `<tr><td>${esc(g.title)}</td><td>${esc(g.author)}</td><td>${esc(g.license)}</td><td><a href="${esc(g.source)}">Quelle</a></td></tr>`,
     ).join("");
     return layout(`Spiele & Lizenzen – ${TITLE}`, `<h1>SPIELE &amp; LIZENZEN</h1>
 <p class="sub"><a href="/">← Zurück zur Arcade</a></p>
-<main class="tables"><section><table><thead><tr><th>Spiel</th><th>Von</th><th>Lizenz</th><th>Quelle</th></tr></thead><tbody>${rows}</tbody></table>
-<p class="note">Alle Spiele werden unter den genannten Lizenzen ihrer Entwickler bereitgestellt. Die Arcade entfernt eingebettetes Tracking und fügt nur Lautstärkeregler und Bestenliste hinzu; der Quellcode der Arcade selbst liegt unter <a href="https://github.com/newtox/arcade">github.com/newtox/arcade</a>.</p></section></main>`);
+<main class="tables"><section><table><thead><tr><th>Was</th><th>Von</th><th>Lizenz</th><th>Quelle</th></tr></thead><tbody>${rows}</tbody></table>
+<p class="note">Doom (Shareware) und Freedoom werden unverändert und kostenlos bereitgestellt, wie es ihre Lizenzen erlauben. Für die Konsolen stellt die Arcade keine Spiele bereit: ROMs werden ausschließlich im Browser der Spieler geladen und dort gespeichert, der Server sieht sie nie. Der Quellcode der Arcade liegt unter <a href="https://github.com/newtox/arcade">github.com/newtox/arcade</a>.</p></section></main>`);
 }
 
-function retroPage(game) {
+function doomPage(game) {
     return `<!doctype html>
 <html lang="de">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(game.title)} – ${esc(TITLE)}</title>
+<link rel="stylesheet" href="${asset("landing.css")}">
 ${scriptTag(game)}
-<style>html,body{margin:0;height:100%;background:#000}#game{width:100%;height:100%}</style>
 </head>
-<body>
-<div id="game"></div>
-<script>
-EJS_player = "#game";
-EJS_core = ${JSON.stringify(game.core)};
-EJS_gameUrl = ${JSON.stringify(`/_arcade/roms/${game.rom}`)};
-EJS_gameName = ${JSON.stringify(game.title)};
-EJS_pathtodata = "/_arcade/ejs/";
-EJS_language = "de-GER";
-EJS_volume = 1;
-EJS_color = "#ff4fa3";
-</script>
-<script src="/_arcade/ejs/loader.js"></script>
+<body class="doom">
+<div id="doom" data-iwad="${esc(game.iwad)}" data-wad-url="/_arcade/wads/${esc(game.iwad)}" data-wasm-url="${asset("doom/doom.wasm")}">
+<canvas width="320" height="200" tabindex="0"></canvas>
+<div class="doom-start">
+<h1>${esc(game.title.toUpperCase())}</h1>
+<button type="button">▶ Klicken zum Starten</button>
+<dl>
+<dt>WASD / Pfeile</dt><dd>Laufen (A/D seitwärts)</dd>
+<dt>Maus</dt><dd>Umsehen – ins Bild klicken fängt die Maus, Esc gibt sie frei</dd>
+<dt>Strg / Linksklick</dt><dd>Schießen</dd>
+<dt>Leertaste / E</dt><dd>Türen &amp; Schalter</dd>
+<dt>Shift</dt><dd>Rennen</dd>
+<dt>1–7</dt><dd>Waffe wechseln</dd>
+<dt>Esc</dt><dd>Menü (Neues Spiel, Speichern, Lautstärke)</dd>
+</dl>
+<p>Für die Bestenliste zählt jeder geschaffte Level ab „Neues Spiel“. Spielstände und Einstellungen werden in deinem Browser gespeichert.</p>
+</div>
+</div>
+<script type="module" src="${asset("doom/player.js")}"></script>
 </body>
 </html>`;
 }
+
+function consolePage(game) {
+    const accept = game.extensions.join(",");
+    return `<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${esc(game.title)} – ${esc(TITLE)}</title>
+<link rel="stylesheet" href="${asset("landing.css")}">
+${scriptTag(game)}
+</head>
+<body class="console-page">
+<div id="console" data-system="${esc(game.id)}" data-core="${esc(game.core)}" data-extensions="${esc(accept)}" data-ejs="/_arcade/ejs/">
+<div class="picker">
+<h1>${esc(game.title.toUpperCase())}</h1>
+<p>Lade ein Spiel von deinem Computer. Die Datei bleibt in deinem Browser – hochgeladen wird nichts.${game.hint ? `<br>${esc(game.hint)}` : ""}</p>
+<label class="drop"><strong>📂 ROM auswählen oder hierher ziehen</strong><small>${esc(game.extensions.join(" "))}</small><input type="file" accept="${esc(accept)}"></label>
+<label class="remember"><input type="checkbox" name="remember" checked> In diesem Browser merken</label>
+<div class="status" role="status"></div>
+<h2>Deine Spiele</h2>
+<ul class="library"><li class="empty">Lädt …</li></ul>
+<a class="back" href="/">← Zurück zur Arcade</a>
+</div>
+<div id="game"></div>
+</div>
+<script src="${asset("console/console.js")}"></script>
+</body>
+</html>`;
+}
+
+const wads = new Set(GAMES.filter((g) => g.iwad).map((g) => g.iwad));
 
 export const server = http.createServer(async (req, res) => {
     try {
@@ -317,6 +347,7 @@ export const server = http.createServer(async (req, res) => {
         const pathname = decodeURIComponent(url.pathname);
 
         if (pathname === "/healthz") return send(res, 200, "ok", { "Content-Type": "text/plain" });
+        if (pathname === "/favicon.ico") return send(res, 204, "", { "Cache-Control": "public, max-age=86400" });
         if (pathname.startsWith("/_arcade/api/")) return handleApi(req, res, url);
         if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "Method not allowed");
         if (pathname === "/" || pathname === "/index.html") return html(res, landingPage());
@@ -325,34 +356,26 @@ export const server = http.createServer(async (req, res) => {
 
         const parts = pathname.split("/");
         if (parts.some((part) => part.startsWith(".") || part === "..")) return send(res, 404, "Not found");
+        const immutable = url.searchParams.has("v");
 
         if (pathname.startsWith("/_arcade/ejs/")) {
             return serveFile(res, path.join(EJS_DIR, pathname.slice("/_arcade/ejs/".length)));
         }
-        if (pathname.startsWith("/_arcade/roms/")) {
-            const rom = pathname.slice("/_arcade/roms/".length);
-            if (!GAMES.some((g) => g.rom === rom)) return send(res, 404, "Not found");
-            return serveFile(res, path.join(ROMS_DIR, rom));
+        if (pathname.startsWith("/_arcade/wads/")) {
+            const wad = pathname.slice("/_arcade/wads/".length);
+            if (!wads.has(wad)) return send(res, 404, "Not found");
+            return serveFile(res, path.join(WADS_DIR, wad), { immutable: true });
         }
         if (pathname.startsWith("/_arcade/")) {
-            return serveFile(res, path.join(PUBLIC_DIR, pathname.slice("/_arcade/".length)));
+            return serveFile(res, path.join(PUBLIC_DIR, pathname.slice("/_arcade/".length)), { immutable });
         }
 
         const [, id, ...rest] = parts;
         const game = gameById.get(id);
         if (!game) return send(res, 404, "Not found", { "Content-Type": "text/plain; charset=utf-8" });
         if (rest.length === 0) return send(res, 301, "", { Location: `/${id}/` });
-
-        if (game.kind === "retro") {
-            if (rest.join("/") === "") return html(res, retroPage(game));
-            return send(res, 404, "Not found");
-        }
-
-        let rel = rest.join("/");
-        if (rel === "" || rel.endsWith("/")) rel += "index.html";
-        const filePath = path.join(GAMES_DIR, id, rel);
-        if (!filePath.startsWith(path.join(GAMES_DIR, id) + path.sep)) return send(res, 404, "Not found");
-        return serveFile(res, filePath, (content) => transform(game, rel, content));
+        if (rest.join("/") !== "") return send(res, 404, "Not found");
+        return html(res, game.kind === "doom" ? doomPage(game) : consolePage(game));
     } catch (err) {
         console.error(err);
         if (!res.headersSent) send(res, 500, "Internal error");

@@ -1,0 +1,392 @@
+diff -ruN a/d_loop.c b/d_loop.c
+--- a/d_loop.c
++++ b/d_loop.c
+@@ -781,7 +781,8 @@
+ 	    return;
+ 	}
+ 
+-        I_Sleep(1);
++        // Web build: never busy-wait, the next animation frame retries.
++        return;
+     }
+ 
+     // run the count * ticdup dics
+diff -ruN a/d_main.c b/d_main.c
+--- a/d_main.c
++++ b/d_main.c
+@@ -35,6 +35,7 @@
+ #include "sounds.h"
+ 
+ #include "d_iwad.h"
++#include "dg_arcade.h"
+ 
+ #include "z_zone.h"
+ #include "w_main.h"
+@@ -305,27 +306,10 @@
+ 	return;
+     }
+     
+-    // wipe update
++    // wipe update: the melt runs over the following frames (see
++    // doomgeneric_Tick) instead of blocking the browser's main thread.
+     wipe_EndScreen(0, 0, SCREENWIDTH, SCREENHEIGHT);
+-
+-    wipestart = I_GetTime () - 1;
+-
+-    do
+-    {
+-	do
+-	{
+-	    nowtime = I_GetTime ();
+-	    tics = nowtime - wipestart;
+-            I_Sleep(1);
+-	} while (tics <= 0);
+-        
+-	wipestart = nowtime;
+-	done = wipe_ScreenWipe(wipe_Melt
+-			       , 0, 0, SCREENWIDTH, SCREENHEIGHT, tics);
+-	I_UpdateNoBlit ();
+-	M_Drawer ();                            // menu is drawn even on top of wipes
+-	I_FinishUpdate ();                      // page flip or blit buffer
+-    } while (!done);
++    DG_WipeBegin();
+ }
+ 
+ //
+@@ -404,6 +388,24 @@
+ 
+ void doomgeneric_Tick()
+ {
++    if (DG_WipeActive())
++    {
++        int tics = DG_WipeTics();
++
++        if (tics > 0)
++        {
++            boolean done = wipe_ScreenWipe(wipe_Melt, 0, 0, SCREENWIDTH, SCREENHEIGHT, tics);
++            I_UpdateNoBlit ();
++            M_Drawer ();
++            I_FinishUpdate ();
++            if (done)
++            {
++                DG_WipeEnd();
++            }
++        }
++        return;
++    }
++
+     // frame syncronous IO operations
+     I_StartFrame ();
+ 
+diff -ruN a/doomtype.h b/doomtype.h
+--- a/doomtype.h
++++ b/doomtype.h
+@@ -52,6 +52,10 @@
+ #define PACKEDATTR
+ #endif
+ 
++#ifndef PACKED_STRUCT
++#define PACKED_STRUCT(...) struct __VA_ARGS__ PACKEDATTR
++#endif
++
+ // C99 integer types; with gcc we just use this.  Other compilers 
+ // should add conditional statements that define the C99 types.
+ 
+diff -ruN a/g_game.c b/g_game.c
+--- a/g_game.c
++++ b/g_game.c
+@@ -71,6 +71,7 @@
+ 
+ 
+ #include "g_game.h"
++#include "dg_arcade.h"
+ 
+ 
+ #define SAVEGAMESIZE	0x2c000
+@@ -1483,6 +1484,9 @@
+     automapactive = false; 
+ 
+     StatCopy(&wminfo);
++
++    if (!demoplayback)
++        DG_LevelDone(&wminfo, gameskill, gameepisode, gamemap);
+  
+     WI_Start (&wminfo); 
+ } 
+@@ -1547,6 +1551,7 @@
+ 
+ void G_DoLoadGame (void) 
+ {
++    DG_GameLoaded();
+     int savedleveltime;
+ 	 
+     gameaction = ga_nothing; 
+@@ -1718,6 +1723,7 @@
+     fastparm = false;
+     nomonsters = false;
+     consoleplayer = 0;
++    DG_NewGame(d_skill, d_episode);
+     G_InitNew (d_skill, d_episode, d_map); 
+     gameaction = ga_nothing; 
+ } 
+diff -ruN a/i_input.c b/i_input.c
+--- a/i_input.c
++++ b/i_input.c
+@@ -41,7 +41,7 @@
+ 
+ #include "doomgeneric.h"
+ 
+-int vanilla_keyboard_mapping = 1;
++int vanilla_keyboard_mapping = 0;
+ 
+ // Is the shift key currently down?
+ 
+@@ -260,6 +260,8 @@
+     return key;
+ }
+ 
++int DG_TypedChar(void);
++
+ static void UpdateShiftStatus(int pressed, unsigned char key)
+ {
+     int change;
+@@ -295,7 +297,7 @@
+             // (shift-translated, etc)
+             event.type = ev_keydown;
+             event.data1 = TranslateKey(key);
+-            event.data2 = GetTypedChar(key);
++            event.data2 = DG_TypedChar() ? DG_TypedChar() : GetTypedChar(key);
+ 
+             if (event.data1 != 0)
+             {
+diff -ruN a/i_oplmusic.c b/i_oplmusic.c
+--- a/i_oplmusic.c
++++ b/i_oplmusic.c
+@@ -1777,7 +1777,7 @@
+     SNDDEVICE_SB,
+ };
+ 
+-music_module_t music_opl_module =
++music_module_t DG_music_module =
+ {
+     music_opl_devices,
+     arrlen(music_opl_devices),
+diff -ruN a/i_sound.c b/i_sound.c
+--- a/i_sound.c
++++ b/i_sound.c
+@@ -18,9 +18,6 @@
+ #include <stdio.h>
+ #include <stdlib.h>
+ 
+-#if defined(FEATURE_SOUND) && !defined(__DJGPP__)
+-#include <SDL_mixer.h>
+-#endif
+ 
+ #include "config.h"
+ #include "doomfeatures.h"
+@@ -131,6 +128,9 @@
+ static void InitMusicModule(void)
+ {
+ #ifdef FEATURE_SOUND
++    extern unsigned int opl_sample_rate;
++    extern unsigned int dg_audio_rate;
++    opl_sample_rate = dg_audio_rate;
+     music_module = &DG_music_module;
+ #endif /* FEATURE_SOUND */
+ }
+diff -ruN a/i_sound.h b/i_sound.h
+--- a/i_sound.h
++++ b/i_sound.h
+@@ -252,5 +252,14 @@
+ 
+ extern char *timidity_cfg_path;
+ 
++// DMX version to emulate for OPL emulation:
++typedef enum {
++    opl_doom1_1_666,    // Doom 1 v1.666
++    opl_doom2_1_666,    // Doom 2 v1.666, Hexen, Heretic
++    opl_doom_1_9        // Doom v1.9, Strife
++} opl_driver_ver_t;
++
++void I_SetOPLDriverVer(opl_driver_ver_t ver);
++
+ #endif
+ 
+diff -ruN a/m_cheat.c b/m_cheat.c
+--- a/m_cheat.c
++++ b/m_cheat.c
+@@ -22,6 +22,7 @@
+ 
+ #include "doomtype.h"
+ #include "m_cheat.h"
++#include "dg_arcade.h"
+ 
+ //
+ // CHEAT SEQUENCE PACKAGE
+@@ -70,6 +71,7 @@
+     {
+         cht->chars_read = cht->param_chars_read = 0;
+ 
++        DG_CheatUsed();
+         return true;
+     }
+     
+diff -ruN a/midifile.c b/midifile.c
+--- a/midifile.c
++++ b/midifile.c
+@@ -24,6 +24,9 @@
+ #include "i_swap.h"
+ #include "i_system.h"
+ #include "midifile.h"
++#ifndef PACKED_STRUCT
++#define PACKED_STRUCT(...) struct __VA_ARGS__ __attribute__((packed))
++#endif
+ 
+ #define HEADER_CHUNK_ID "MThd"
+ #define TRACK_CHUNK_ID  "MTrk"
+@@ -428,7 +431,7 @@
+         return false;
+     }
+ 
+-    track->data_len = SDL_SwapBE32(chunk_header.chunk_size);
++    track->data_len = __builtin_bswap32(chunk_header.chunk_size);
+ 
+     return true;
+ }
+@@ -540,16 +543,16 @@
+     }
+ 
+     if (!CheckChunkHeader(&file->header.chunk_header, HEADER_CHUNK_ID)
+-     || SDL_SwapBE32(file->header.chunk_header.chunk_size) != 6)
++     || __builtin_bswap32(file->header.chunk_header.chunk_size) != 6)
+     {
+         fprintf(stderr, "ReadFileHeader: Invalid MIDI chunk header! "
+                         "chunk_size=%i\n",
+-                        SDL_SwapBE32(file->header.chunk_header.chunk_size));
++                        __builtin_bswap32(file->header.chunk_header.chunk_size));
+         return false;
+     }
+ 
+-    format_type = SDL_SwapBE16(file->header.format_type);
+-    file->num_tracks = SDL_SwapBE16(file->header.num_tracks);
++    format_type = __builtin_bswap16(file->header.format_type);
++    file->num_tracks = __builtin_bswap16(file->header.num_tracks);
+ 
+     if ((format_type != 0 && format_type != 1)
+      || file->num_tracks < 1)
+@@ -694,7 +697,7 @@
+ 
+ unsigned int MIDI_GetFileTimeDivision(midi_file_t *file)
+ {
+-    short result = SDL_SwapBE16(file->header.time_division);
++    short result = __builtin_bswap16(file->header.time_division);
+ 
+     // Negative time division indicates SMPTE time and must be handled
+     // differently.
+diff -ruN a/opl.c b/opl.c
+--- a/opl.c
++++ b/opl.c
+@@ -21,36 +21,17 @@
+ #include <stdlib.h>
+ #include <string.h>
+ 
+-#include "SDL.h"
+ 
+ #include "opl.h"
+ #include "opl_internal.h"
+ 
+ //#define OPL_DEBUG_TRACE
+ 
+-#if (defined(__i386__) || defined(__x86_64__)) && defined(HAVE_IOPERM)
+-extern opl_driver_t opl_linux_driver;
+-#endif
+-#if defined(HAVE_LIBI386) || defined(HAVE_LIBAMD64)
+-extern opl_driver_t opl_openbsd_driver;
+-#endif
+-#ifdef _WIN32
+-extern opl_driver_t opl_win32_driver;
+-#endif
+-extern opl_driver_t opl_sdl_driver;
++extern opl_driver_t opl_web_driver;
+ 
+ static opl_driver_t *drivers[] =
+ {
+-#if (defined(__i386__) || defined(__x86_64__)) && defined(HAVE_IOPERM)
+-    &opl_linux_driver,
+-#endif
+-#if defined(HAVE_LIBI386) || defined(HAVE_LIBAMD64)
+-    &opl_openbsd_driver,
+-#endif
+-#ifdef _WIN32
+-    &opl_win32_driver,
+-#endif
+-    &opl_sdl_driver,
++    &opl_web_driver,
+     NULL
+ };
+ 
+@@ -451,59 +432,16 @@
+     }
+ }
+ 
+-typedef struct
+-{
+-    int finished;
+-
+-    SDL_mutex *mutex;
+-    SDL_cond *cond;
+-} delay_data_t;
+-
+-static void DelayCallback(void *_delay_data)
+-{
+-    delay_data_t *delay_data = _delay_data;
+-
+-    SDL_LockMutex(delay_data->mutex);
+-    delay_data->finished = 1;
+-
+-    SDL_CondSignal(delay_data->cond);
+-
+-    SDL_UnlockMutex(delay_data->mutex);
+-}
++// Single-threaded web build: there is no audio thread to wait for, so
++// advance the emulated clock directly (only used during chip detection).
++extern void OPL_Web_AdvanceTime(uint64_t us);
+ 
+ void OPL_Delay(uint64_t us)
+ {
+-    delay_data_t delay_data;
+-
+-    if (driver == NULL)
+-    {
+-        return;
+-    }
+-
+-    // Create a callback that will signal this thread after the
+-    // specified time.
+-
+-    delay_data.finished = 0;
+-    delay_data.mutex = SDL_CreateMutex();
+-    delay_data.cond = SDL_CreateCond();
+-
+-    OPL_SetCallback(us, DelayCallback, &delay_data);
+-
+-    // Wait until the callback is invoked.
+-
+-    SDL_LockMutex(delay_data.mutex);
+-
+-    while (!delay_data.finished)
++    if (driver != NULL)
+     {
+-        SDL_CondWait(delay_data.cond, delay_data.mutex);
++        OPL_Web_AdvanceTime(us);
+     }
+-
+-    SDL_UnlockMutex(delay_data.mutex);
+-
+-    // Clean up.
+-
+-    SDL_DestroyMutex(delay_data.mutex);
+-    SDL_DestroyCond(delay_data.cond);
+ }
+ 
+ void OPL_SetPaused(int paused)

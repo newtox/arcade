@@ -32,5 +32,49 @@ p.credits { text-align:center; color:var(--muted); font-size:12px; margin:24px 0
 p.credits a { color:var(--muted); }
 h2.section { text-align:center; color:var(--accent); margin:48px 0 6px; font-size:clamp(22px,4vw,32px); text-shadow:2px 2px 0 #000; }
 a.game small { display:block; color:var(--gold); font-size:12px; margin:-2px 0 8px; }
-a.game.retro em { margin-bottom:0; }
+a.game.console em { margin-bottom:0; }
 p.note { color:var(--muted); font-size:13px; margin:14px 0 0; }
+
+/* Doom player */
+body.doom { padding:0; height:100vh; overflow:hidden; background:#000; display:flex; align-items:center; justify-content:center; }
+#doom { position:relative; width:min(100vw, calc(100vh * 4 / 3)); aspect-ratio:4/3; }
+#doom canvas { display:block; width:100%; height:100%; image-rendering:pixelated; outline:none; cursor:crosshair; }
+.doom-start { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px;
+              background:rgba(10,8,16,.86); color:var(--text); cursor:pointer; text-align:center; padding:16px; }
+.doom-start h1 { margin:0; }
+.doom-start button { font:inherit; font-size:20px; padding:10px 22px; background:var(--accent); color:#14111f; border:0; box-shadow:4px 4px 0 #000; cursor:pointer; }
+.doom-start button:disabled { opacity:.6; cursor:wait; }
+.doom-start:not(.ready) button::after { content:" (lädt …)"; }
+.doom-start dl { display:grid; grid-template-columns:auto auto; gap:4px 14px; margin:0; font-size:14px; text-align:left; color:var(--muted); }
+.doom-start dt { color:var(--gold); text-align:right; }
+.doom-start dd { margin:0; }
+.doom-start p { margin:0; font-size:13px; color:var(--muted); max-width:520px; }
+
+/* Console (bring your own ROM) */
+body.console-page { padding:0; min-height:100vh; }
+#console { min-height:100vh; display:flex; flex-direction:column; }
+#console.running { height:100vh; }
+#console #game { flex:1; display:none; }
+#console.running #game { display:block; width:100%; height:100%; }
+.picker { max-width:640px; margin:0 auto; padding:32px 16px; width:100%; }
+.picker h1 { margin-bottom:4px; }
+.picker p { color:var(--muted); text-align:center; margin:0 0 18px; }
+.drop { display:block; border:3px dashed var(--line); background:var(--card); padding:28px 16px; text-align:center; cursor:pointer; box-shadow:6px 6px 0 #000; }
+.drop.over, .drop:hover { border-color:var(--accent); }
+.drop strong { display:block; font-size:18px; margin-bottom:6px; }
+.drop small { color:var(--muted); }
+.drop input { display:none; }
+.picker label.remember { display:flex; gap:8px; align-items:center; justify-content:center; margin:14px 0 0; color:var(--muted); font-size:14px; }
+.picker .status { min-height:1.2em; text-align:center; margin:10px 0 0; color:var(--gold); font-size:14px; }
+.picker .status.error { color:#ff6b6b; }
+.picker h2 { font-size:18px; margin:28px 0 8px; }
+.library { list-style:none; margin:0; padding:0; }
+.library li { display:flex; align-items:center; gap:10px; background:var(--card); border:2px solid var(--line); padding:6px 8px; margin-bottom:6px; }
+.library li.empty { color:var(--muted); justify-content:center; }
+.library button { font:inherit; background:none; border:0; color:var(--text); cursor:pointer; padding:4px; }
+.library button.play { flex:1; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.library button.play:hover { color:var(--accent); }
+.library button.delete { color:var(--muted); }
+.library button.delete:hover { color:#ff6b6b; }
+.library small { color:var(--muted); white-space:nowrap; }
+.picker .back { display:block; text-align:center; margin-top:24px; }

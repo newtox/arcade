@@ -2,39 +2,34 @@
 
 A small self-hosted arcade with leaderboards, built to be embedded in [WorkAdventure](https://workadventu.re).
 
-It serves open-source browser games and freely licensed homebrew for retro consoles, and injects a tiny script into each page that
+- **Doom** and **Freedoom** run directly in the browser, with music, sound, savegames and a shared leaderboard.
+- **Console cabinets** (N64, NES, SNES, Game Boy, GBA, Mega Drive, PlayStation) run games the players load from their own disk. ROMs never leave the player's browser: they are kept in IndexedDB on request and are not uploaded or hosted by the server.
+- Every page gets a small overlay with volume control, and the player name comes from WorkAdventure when opened from a map (via the iframe API).
 
-- keeps the volume low by default and adds a volume/mute control (HTML audio and Web Audio),
-- detects the end of a game and submits the score to a shared leaderboard,
-- takes the player name from WorkAdventure when the game is opened from a map (via the iframe API), or asks for it otherwise.
+## Doom
 
-No game code is forked: the server patches the few lines it needs on the fly.
+The engine is [doomgeneric](https://github.com/ozkl/doomgeneric) compiled to WebAssembly (WASI reactor) with `zig cc`, plus Chocolate Doom's OPL music emulation from [cloudflare/doom-wasm](https://github.com/cloudflare/doom-wasm). `doom/build.sh` takes both checkouts at pinned commits, applies `doom/web.patch` and adds the browser layer in `doom/src/`:
 
-## Games
+- `doomgeneric_web.c` – video, input, sound effects and the hooks for the page
+- `opl_web.c` – single-threaded OPL backend that the page pulls audio from
+- the patch makes the screen wipe non-blocking, removes busy-waiting and reports finished levels, new games, loaded savegames and cheats
 
-### Browser games (with leaderboard)
+`public/doom/player.js` runs the module with [browser_wasi_shim](https://github.com/bjorn3/browser_wasi_shim), draws to a canvas, plays sound through Web Audio and stores config and savegames in IndexedDB.
 
-| Game | Score | Source | License |
-|---|---|---|---|
-| Space Huggers | Kills | [KilledByAPixel/SpaceHuggers](https://github.com/KilledByAPixel/SpaceHuggers) | GPL-3.0 |
-| Radius Raid | Points | [jackrugile/radius-raid-js13k](https://github.com/jackrugile/radius-raid-js13k) | MIT |
-| HexGL | Best time | [BKcore/HexGL](https://github.com/BKcore/HexGL) | MIT |
+| IWAD | License |
+|---|---|
+| `doom1.wad` (Doom shareware v1.9) | Freely distributable, unmodified and free of charge |
+| `freedoom1.wad` ([Freedoom](https://freedoom.github.io/) 0.13.0) | BSD-3-Clause |
 
-### Retro cabinets (EmulatorJS)
+Both are downloaded at build time and verified by checksum.
 
-| Game | System | Source | License |
-|---|---|---|---|
-| Double Action Blaster Guys | NES | [NovaSquirrel/DABG](https://github.com/NovaSquirrel/DABG) | zlib |
-| RHDE: Furniture Fight | NES | [pinobatch/rhde-nes](https://github.com/pinobatch/rhde-nes) | GNU All-Permissive |
-| Thwaite | NES | [pinobatch/thwaite-nes](https://github.com/pinobatch/thwaite-nes) | GPL-3.0 |
-| Nova the Squirrel | NES | [NovaSquirrel/NovaTheSquirrel](https://github.com/NovaSquirrel/NovaTheSquirrel) | GPL-3.0 / CC BY-NC-SA 4.0 |
-| Concentration Room | NES | [pinobatch/croom-nes](https://github.com/pinobatch/croom-nes) | GPL-3.0 |
-| Libbet and the Magic Floor | Game Boy | [pinobatch/libbet](https://github.com/pinobatch/libbet) | zlib |
+### Scoring
 
-The ROMs are the official release builds of these homebrew projects; their checksums are verified at build time.
-The emulator is [EmulatorJS](https://github.com/EmulatorJS/EmulatorJS) 4.2.3 (GPL-3.0) with the `fceumm` and `gambatte` cores, served from the container itself (no CDN).
+Each finished level adds `kills × 100 + items × 20 + secrets × 500 + 20 per second under par`, multiplied by the skill level (×0.5 … ×2). A run starts with *New Game*; runs with cheats or loaded savegames are not submitted. The best total per player counts.
 
-All games are fetched at build time. Ads and analytics are stripped when served. `/about` lists every game with its author, license and source.
+## Consoles
+
+The console pages use [EmulatorJS](https://github.com/EmulatorJS/EmulatorJS) 4.2.3 with the cores `fceumm`, `snes9x`, `mupen64plus_next`, `gambatte`, `mgba`, `genesis_plus_gx` and `pcsx_rearmed`, all served from the container (no CDN). Save data is kept by EmulatorJS in the browser.
 
 ## Running
 
@@ -49,34 +44,20 @@ docker compose up -d
 | `WA_URL` | – | WorkAdventure base URL, used to load `iframe_api.js` for the player name |
 | `FRAME_ANCESTORS` | `'self'` | Sites allowed to embed the arcade |
 | `ARCADE_TITLE` | `Arcade` | Title on the start page |
-| `GAMES_DIR` | `./games` | Browser games |
-| `ROMS_DIR` | `./roms` | Retro ROMs |
-| `EJS_DIR` | `./emulatorjs` | EmulatorJS `data` folder including cores |
+| `PUBLIC_DIR`, `WADS_DIR`, `EJS_DIR` | inside the image | Static files, IWADs, EmulatorJS |
 
 The data directory must be writable by UID 1000.
 
 ## Embedding in WorkAdventure
 
-Create an area with an **Open website** property pointing to e.g. `https://arcade.example.com/spacehuggers/` and enable **Allow API**, so the game can read the player's name.
+Create an area with **Open website** pointing to e.g. `https://arcade.example.com/doom/`, enable **Allow API** (for the player name) and set the iframe policy to `fullscreen; gamepad; autoplay`.
 
 ## API
 
-- `GET /_arcade/api/scores` – top 10 of every game
-- `GET /_arcade/api/scores?game=hexgl&limit=25` – top list of one game
-- `POST /_arcade/api/scores` – `{ "game": "radiusraid", "name": "Justin", "score": 1234 }`
+- `GET /_arcade/api/scores` – top 10 of every game with a leaderboard
+- `GET /_arcade/api/scores?game=doom&limit=25` – top list of one game
+- `POST /_arcade/api/scores` – `{ "game": "doom", "name": "Justin", "score": 1234 }`
 
-Scores are kept per player; the leaderboard shows each player's best score (highest, or lowest for time-based games).
+## Licenses
 
-## Local development
-
-Build the image once and copy the assets out of it:
-
-```sh
-docker build -t arcade .
-id=$(docker create arcade)
-for d in games roms emulatorjs; do docker cp "$id:/app/$d" .; done
-docker rm "$id"
-DATA_DIR=./data node server.mjs
-```
-
-Requires Node.js 22.5 or newer (uses the built-in `node:sqlite`).
+The arcade code is by its authors; the Doom port in `doom/` is GPL-2.0 like doomgeneric and Chocolate Doom. See `/about` in the running arcade for all components.

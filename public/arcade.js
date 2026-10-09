@@ -161,6 +161,7 @@
     }
 
     function askName() {
+        if (document.exitPointerLock && document.pointerLockElement) document.exitPointerLock();
         return new Promise(function (resolve) {
             var dialog = el("div", "arcade-dialog");
             dialog.innerHTML =
@@ -208,7 +209,10 @@
         });
     }
 
-    window.arcadeGameOver = function (rawScore) {
+    // opts.toast: show a small non-blocking message instead of the leaderboard panel
+    // opts.final: show the leaderboard panel (end of a run)
+    window.arcadeGameOver = function (rawScore, opts) {
+        opts = opts || {};
         if (!SCORED) return;
         var score = Math.round(Number(rawScore));
         if (!(score > 0)) return;
@@ -221,11 +225,25 @@
                 return name || askName();
             })
             .then(function (name) {
-                if (!name) return showBoard(null);
-                return api("POST", "", { game: GAME, name: name, score: score }).then(showBoard, function () {
-                    showBoard(null);
-                });
+                if (!name) {
+                    if (opts.toast && !opts.final) return showToast(opts.toast + "\n(nicht eingetragen)");
+                    return showBoard(null);
+                }
+                return api("POST", "", { game: GAME, name: name, score: score }).then(
+                    function (result) {
+                        if (opts.toast) showToast(opts.toast + "\nPlatz " + result.rank + " in der Bestenliste");
+                        if (!opts.toast || opts.final) showBoard(result);
+                    },
+                    function () {
+                        if (opts.toast) showToast(opts.toast + "\nBestenliste gerade nicht erreichbar");
+                        else showBoard(null);
+                    },
+                );
             });
+    };
+
+    window.arcadeToast = function (text) {
+        showToast(text);
     };
 
     // ---------- UI ----------
@@ -254,7 +272,10 @@
         ".arcade-panel li.me{color:#ffd84f;font-weight:bold}.arcade-panel li span{float:right;margin-left:16px}" +
         ".arcade-panel p{margin:10px 0 0;color:#a99cc9}.arcade-panel button,.arcade-dialog button{margin-top:12px;background:#ff4fa3;color:#14111f;border:0;padding:6px 12px;font:inherit;cursor:pointer}" +
         ".arcade-dialog label{display:block;margin-bottom:8px}.arcade-dialog input{width:100%;box-sizing:border-box;padding:6px;font:inherit;background:#14111f;color:#f3eefc;border:2px solid #3d3360}" +
-        ".arcade-dialog div{display:flex;gap:8px;justify-content:flex-end}.arcade-dialog [data-skip]{background:#3d3360;color:#f3eefc}";
+        ".arcade-dialog div{display:flex;gap:8px;justify-content:flex-end}.arcade-dialog [data-skip]{background:#3d3360;color:#f3eefc}" +
+        ".arcade-toasts{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:2147483645;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none;max-width:92vw}" +
+        ".arcade-toast{background:rgba(20,17,31,.92);color:#f3eefc;border:2px solid #ff4fa3;box-shadow:4px 4px 0 #000;padding:8px 12px;font:13px/1.45 ui-monospace,monospace;white-space:pre-line;transition:opacity .4s}" +
+        ".arcade-toast.out{opacity:0}";
 
     var bar = el("div", "arcade-bar");
     stopKeys(bar);
@@ -279,6 +300,21 @@
                 api("GET", "?game=" + encodeURIComponent(GAME)).then(showBoard);
             };
         }
+    }
+
+    var toastBox = null;
+    function showToast(text) {
+        if (!toastBox) {
+            toastBox = el("div", "arcade-toasts");
+            document.body.appendChild(toastBox);
+        }
+        var t = el("div", "arcade-toast");
+        t.textContent = text;
+        toastBox.appendChild(t);
+        setTimeout(function () {
+            t.classList.add("out");
+            setTimeout(function () { t.remove(); }, 400);
+        }, 7000);
     }
 
     function showBoard(result) {
@@ -306,29 +342,6 @@
         });
     }
 
-    // ---------- Game hooks (installed after the game scripts have loaded) ----------
-
-    function hook() {
-        if (GAME === "radiusraid" && window.$ && typeof window.$.setState === "function") {
-            var setState = window.$.setState;
-            window.$.setState = function (state) {
-                var result = setState.apply(this, arguments);
-                if (state === "gameover") window.arcadeGameOver(window.$.score);
-                return result;
-            };
-        }
-
-        if (GAME === "hexgl" && window.bkcore && bkcore.hexgl && bkcore.hexgl.Gameplay) {
-            var proto = bkcore.hexgl.Gameplay.prototype;
-            var end = proto.end;
-            proto.end = function (result) {
-                var out = end.apply(this, arguments);
-                if (result === this.results.FINISH && this.finishTime) window.arcadeGameOver(this.finishTime);
-                return out;
-            };
-        }
-    }
-
     function mount() {
         var style = el("style");
         style.textContent = css;
@@ -340,6 +353,4 @@
 
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", mount);
     else mount();
-    if (document.readyState === "complete") hook();
-    else window.addEventListener("load", hook);
 })();

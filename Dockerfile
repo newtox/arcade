@@ -1,42 +1,53 @@
-FROM alpine:3.20 AS games
-RUN apk add --no-cache git curl
-WORKDIR /games
-RUN git clone --depth 1 https://github.com/KilledByAPixel/SpaceHuggers.git spacehuggers \
- && git clone --depth 1 https://github.com/jackrugile/radius-raid-js13k.git radiusraid \
- && git clone --depth 1 https://github.com/BKcore/HexGL.git hexgl \
- && rm -rf */.git hexgl/package.zip
-WORKDIR /roms
-RUN curl -fsSLO https://github.com/NovaSquirrel/DABG/releases/download/v2/dabg.nes \
- && curl -fsSLO https://github.com/pinobatch/rhde-nes/releases/download/v0.07/rhde.nes \
- && curl -fsSLO https://github.com/pinobatch/thwaite-nes/releases/download/v0.04/thwaite.nes \
- && curl -fsSLO https://github.com/NovaSquirrel/NovaTheSquirrel/releases/download/v1.0.6a/nova.nes \
- && curl -fsSLO https://github.com/pinobatch/croom-nes/releases/download/v0.02a/croom.nes \
- && curl -fsSLO https://github.com/pinobatch/libbet/releases/download/v0.08/libbet.gb \
- && printf '%s\n' \
-    "eca79b9d0b546e96c1bc73099e239539fb9c7773ff10a431bb3a9cd6763208ca  dabg.nes" \
-    "b2c4748a5b3651e393572046daf126213653b58b55472cdfdf4b863834dd0241  rhde.nes" \
-    "a2df24d9c9f72e56c2fdc4c703becc47a5700ad0158da8208247635ebeb3779c  thwaite.nes" \
-    "e4780e90b9d1587489bfb797d2ca395be21371ea9262fa9f87f99324ec6960ab  nova.nes" \
-    "2ce17df1ad66a8a0533c0a8739f5b5ebe275c264924bbe350c42c5ac0394f20e  croom.nes" \
-    "3607412031c8287cf878299ce96e581e85b852dde703806343b95576fa3ff1a9  libbet.gb" \
-    | sha256sum -c -
+# --- Doom engine: doomgeneric + Chocolate Doom OPL music, compiled to WebAssembly with zig ---
+FROM python:3.12-alpine AS doom
+RUN apk add --no-cache git patch && pip install --no-cache-dir ziglang==0.13.0
+WORKDIR /src
+RUN git init -q doomgeneric \
+ && git -C doomgeneric fetch -q --depth 1 https://github.com/ozkl/doomgeneric.git dcb7a8dbc7a16ce3dda29382ac9aae9d77d21284 \
+ && git -C doomgeneric checkout -q FETCH_HEAD \
+ && git init -q doom-wasm \
+ && git -C doom-wasm fetch -q --depth 1 https://github.com/cloudflare/doom-wasm.git 65e0d3ae2ffa604155eebd96ed40da6567bd08f4 \
+ && git -C doom-wasm checkout -q FETCH_HEAD
+COPY doom ./doom
+RUN mkdir -p /out && ZIG="python3 -m ziglang" sh doom/build.sh doomgeneric doom-wasm /out/doom.wasm
 
-FROM node:22-alpine AS emulator
+# --- Game data (freely distributable IWADs), WASI shim and EmulatorJS with cores ---
+FROM node:22-alpine AS assets
+RUN apk add --no-cache curl unzip
 WORKDIR /build
-RUN npm pack --silent @emulatorjs/emulatorjs@4.2.3 @emulatorjs/core-fceumm@4.2.3 @emulatorjs/core-gambatte@4.2.3 \
- && mkdir -p ejs core && tar -xzf emulatorjs-emulatorjs-4.2.3.tgz -C ejs \
- && for c in fceumm gambatte; do mkdir -p core/$c && tar -xzf emulatorjs-core-$c-4.2.3.tgz -C core/$c; done \
- && mkdir -p out/cores/reports && cp -r ejs/package/data/* out/ \
- && for c in fceumm gambatte; do cp core/$c/package/*.data out/cores/ && cp core/$c/package/reports/*.json out/cores/reports/; done
+RUN npm pack --silent @nicejsisverycool/tizendoom@0.1.6 @bjorn3/browser_wasi_shim@0.4.2 >/dev/null \
+ && mkdir -p wads wasi \
+ && tar -xzf nicejsisverycool-tizendoom-0.1.6.tgz -O package/doom1.wad > wads/doom1.wad \
+ && curl -fsSLo freedoom.zip https://github.com/freedoom/freedoom/releases/download/v0.13.0/freedoom-0.13.0.zip \
+ && unzip -p freedoom.zip freedoom-0.13.0/freedoom1.wad > wads/freedoom1.wad \
+ && unzip -p freedoom.zip freedoom-0.13.0/COPYING.txt > wads/FREEDOOM-COPYING.txt \
+ && printf '%s\n' \
+    "1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771  wads/doom1.wad" \
+    "7323bcc168c5a45ff10749b339960e98314740a734c30d4b9f3337001f9e703d  wads/freedoom1.wad" \
+    | sha256sum -c - \
+ && tar -xzf bjorn3-browser_wasi_shim-0.4.2.tgz \
+ && cp package/dist/*.js package/LICENSE* wasi/ && rm -rf package
+ARG EJS_VERSION=4.2.3
+ARG EJS_CORES="fceumm gambatte snes9x mupen64plus_next mgba genesis_plus_gx pcsx_rearmed"
+RUN npm pack --silent @emulatorjs/emulatorjs@$EJS_VERSION >/dev/null \
+ && mkdir -p ejs out/cores/reports && tar -xzf emulatorjs-emulatorjs-$EJS_VERSION.tgz -C ejs \
+ && cp -r ejs/package/data/* out/ \
+ && for c in $EJS_CORES; do \
+      npm pack --silent @emulatorjs/core-$c@$EJS_VERSION >/dev/null \
+      && mkdir -p core/$c && tar -xzf emulatorjs-core-$c-$EJS_VERSION.tgz -C core/$c \
+      && cp core/$c/package/$c-wasm.data core/$c/package/$c-legacy-wasm.data out/cores/ \
+      && cp core/$c/package/reports/*.json out/cores/reports/ || exit 1; \
+    done
 
 FROM node:22-alpine
 ENV NODE_ENV=production NODE_NO_WARNINGS=1 PORT=8080 DATA_DIR=/data
 WORKDIR /app
-COPY --from=games /games ./games
-COPY --from=games /roms ./roms
-COPY --from=emulator /build/out ./emulatorjs
 COPY server.mjs games.mjs ./
 COPY public ./public
+COPY --from=doom /out/doom.wasm ./public/doom/doom.wasm
+COPY --from=assets /build/wasi ./public/vendor/wasi
+COPY --from=assets /build/wads ./wads
+COPY --from=assets /build/out ./emulatorjs
 RUN mkdir -p /data && chown node:node /data
 USER node
 EXPOSE 8080
