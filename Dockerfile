@@ -1,5 +1,5 @@
 # --- Doom engine: doomgeneric + Chocolate Doom OPL music, compiled to WebAssembly with zig ---
-FROM python:3.12-alpine AS doom
+FROM public.ecr.aws/docker/library/python:3.12-alpine AS doom
 RUN apk add --no-cache git patch && pip install --no-cache-dir ziglang==0.13.0
 WORKDIR /src
 RUN git init -q doomgeneric \
@@ -12,7 +12,7 @@ COPY doom ./doom
 RUN mkdir -p /out && ZIG="python3 -m ziglang" sh doom/build.sh doomgeneric doom-wasm /out/doom.wasm
 
 # --- Game data (freely distributable IWADs), WASI shim and EmulatorJS with cores ---
-FROM node:22-alpine AS assets
+FROM public.ecr.aws/docker/library/node:22-alpine AS assets
 RUN apk add --no-cache curl unzip
 WORKDIR /build
 RUN npm pack --silent @nicejsisverycool/tizendoom@0.1.6 @bjorn3/browser_wasi_shim@0.4.2 >/dev/null \
@@ -39,7 +39,7 @@ RUN npm pack --silent @emulatorjs/emulatorjs@$EJS_VERSION >/dev/null \
       && cp core/$c/package/reports/*.json out/cores/reports/ || exit 1; \
     done
 
-FROM node:22-alpine
+FROM public.ecr.aws/docker/library/node:22-alpine
 ENV NODE_ENV=production NODE_NO_WARNINGS=1 PORT=8080 DATA_DIR=/data
 WORKDIR /app
 COPY server.mjs games.mjs ./
