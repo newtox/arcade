@@ -66,4 +66,4 @@ Create an area with **Open website** pointing to e.g. `https://arcade.example.co
 
 ## Licenses
 
-The arcade code is by its authors; Pac-Man in `public/pacman/` is WTFPL; the Doom port in `doom/` is GPL-2.0 like doomgeneric and Chocolate Doom. See `/about` in the running arcade for all components.
+The arcade's own code is licensed under [Creative Commons Attribution-NonCommercial-ShareAlike 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/). Bundled third-party parts keep their own licenses: Pac-Man in `public/pacman/` is WTFPL, the Doom port in `doom/` is GPL-2.0 like doomgeneric and Chocolate Doom. See `/about` in the running arcade for all components.
